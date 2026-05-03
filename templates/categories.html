@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}分类管理 - 网课视频库{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h3>📂 分类管理</h3>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" onclick="showAddDialog()">
+            <i class="bi bi-plus-circle"></i> 新建分类
+        </button>
+    </div>
+</div>
+
+<div class="row" id="categoryList"></div>
+
+<!-- Add/Edit Dialog -->
+<div class="modal fade" id="categoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">新建分类</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="mb-3">
+                    <label class="form-label">分类名称</label>
+                    <input type="text" class="form-control" id="catName" placeholder="例如：编程、数学、英语">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">图标 (Emoji)</label>
+                    <input type="text" class="form-control" id="catIcon" placeholder="📁" maxlength="4">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveCategory()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function loadCategories() {
+        fetch('/api/categories')
+            .then(r => r.json())
+            .then(cats => {
+                const list = document.getElementById('categoryList');
+                if (cats.length === 0) {
+                    list.innerHTML = '<div class="col-12 text-center py-5 text-muted">暂无分类，请点击上方按钮新建</div>';
+                    return;
+                }
+                list.innerHTML = cats.map(c => `
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body text-center">
+                                <div style="font-size: 2rem;">${c.icon}</div>
+                                <h5 class="card-title mt-2">${c.name}</h5>
+                                <p class="text-muted small">${c.video_count} 个视频</p>
+                            </div>
+                            <div class="card-footer bg-transparent d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-primary flex-fill" onclick="editCategory(${c.id}, '${c.name}', '${c.icon}')">
+                                    <i class="bi bi-pencil"></i> 编辑
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger flex-fill" onclick="deleteCategory(${c.id}, '${c.name}')">
+                                    <i class="bi bi-trash"></i> 删除
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            });
+    }
+
+    function showAddDialog() {
+        document.getElementById('modalTitle').textContent = '新建分类';
+        document.getElementById('editId').value = '';
+        document.getElementById('catName').value = '';
+        document.getElementById('catIcon').value = '📁';
+        new bootstrap.Modal(document.getElementById('categoryModal')).show();
+    }
+
+    function editCategory(id, name, icon) {
+        document.getElementById('modalTitle').textContent = '编辑分类';
+        document.getElementById('editId').value = id;
+        document.getElementById('catName').value = name;
+        document.getElementById('catIcon').value = icon;
+        new bootstrap.Modal(document.getElementById('categoryModal')).show();
+    }
+
+    function saveCategory() {
+        const editId = document.getElementById('editId').value;
+        const name = document.getElementById('catName').value.trim();
+        const icon = document.getElementById('catIcon').value.trim() || '📁';
+        if (!name) { alert('请输入分类名称'); return; }
+
+        const isNew = !editId;
+        const url = isNew ? '/api/categories' : `/api/categories/${editId}`;
+        const method = isNew ? 'POST' : 'PUT';
+
+        fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, icon })
+        })
+        .then(r => r.json())
+        .then(() => {
+            bootstrap.Modal.getInstance(document.getElementById('categoryModal')).hide();
+            loadCategories();
+        });
+    }
+
+    function deleteCategory(id, name) {
+        if (!confirm(`确定删除分类"${name}"吗？该分类下的视频将变为未分类状态。`)) return;
+        fetch(`/api/categories/${id}`, { method: 'DELETE' })
+            .then(() => loadCategories());
+    }
+
+    document.addEventListener('DOMContentLoaded', loadCategories);
+</script>
+{% endblock %}

@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}{{ video.title }} - 网课视频库{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h4 id="videoTitle" class="card-title">{{ video.title }}</h4>
+                <div class="mb-3" id="videoMeta">
+                    <span class="badge bg-light text-dark me-2" id="catBadge">
+                        {{ video.category_icon or '📁' }} {{ video.category_name or '未分类' }}
+                    </span>
+                    <span class="badge" id="statusBadge"></span>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-3 text-muted small">文件大小</div>
+                    <div class="col-md-9" id="videoSize">{{ video.file_size }}</div>
+                    <div class="col-md-3 text-muted small">时长</div>
+                    <div class="col-md-9" id="videoDuration">{{ video.duration or '未知' }}</div>
+                    <div class="col-md-3 text-muted small">文件路径</div>
+                    <div class="col-md-9 small text-truncate" title="{{ video.file_path }}">{{ video.file_path }}</div>
+                </div>
+
+                <div class="mb-3" id="videoTags">
+                    {% for t in video.tags %}
+                    <span class="badge bg-info me-1 tag-badge">
+                        {{ t }}
+                        <i class="bi bi-x-circle tag-remove" onclick="removeTag('{{ t }}')" style="cursor:pointer;"></i>
+                    </span>
+                    {% endfor %}
+                    <span class="text-muted small add-tag-link" onclick="showAddTag()" style="cursor:pointer;">
+                        + 添加标签
+                    </span>
+                </div>
+
+                <div class="d-flex gap-2 mb-4">
+                    <button class="btn btn-success" onclick="playVideo()">
+                        <i class="bi bi-play-fill"></i> 用系统播放器打开
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="openFolder()">
+                        <i class="bi bi-folder"></i> 打开文件夹
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="toggleStream()">
+                        <i class="bi bi-play-btn"></i> 网页播放
+                    </button>
+                </div>
+
+                <div id="streamPlayer" class="mb-3" style="display:none;">
+                    <video controls style="width:100%; max-height:400px;">
+                        <source src="/api/videos/{{ video.id }}/stream" type="video/mp4">
+                        您的浏览器不支持视频播放
+                    </video>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small text-muted">播放状态</label>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="setStatus('unwatched')">🆕 未看</button>
+                        <button class="btn btn-sm btn-outline-warning me-1" onclick="setStatus('watching')">👀 在看</button>
+                        <button class="btn btn-sm btn-outline-success" onclick="setStatus('watched')">✅ 已看</button>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small text-muted">备注</label>
+                    <textarea class="form-control" id="videoNotes" rows="3" onblur="saveNotes()">{{ video.notes or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header">分类</div>
+            <div class="card-body">
+                <select class="form-select" id="editCategory" onchange="saveCategory()">
+                    <option value="">未分类</option>
+                    {% for c in categories %}
+                    <option value="{{ c.id }}" {% if video.category_id == c.id %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-header">编辑标题</div>
+            <div class="card-body">
+                <input type="text" class="form-control" id="editTitle" value="{{ video.title }}" onblur="saveTitle()">
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3" id="addTagPanel" style="display:none;">
+            <div class="card-header">添加标签</div>
+            <div class="card-body">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="newTagInput" placeholder="输入标签名，回车确认" onkeydown="if(event.key==='Enter') addTag()">
+                    <button class="btn btn-primary" onclick="addTag()">添加</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <button class="btn btn-danger w-100" onclick="deleteVideo()">
+                    <i class="bi bi-trash"></i> 删除此视频记录
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const VIDEO_ID = {{ video.id }};
+
+    function refreshPage() {
+        location.reload();
+    }
+
+    function playVideo() {
+        fetch(`/api/videos/${VIDEO_ID}/open`, { method: 'POST' })
+            .then(r => r.json())
+            .then(() => refreshPage());
+    }
+
+    function openFolder() {
+        fetch(`/api/videos/${VIDEO_ID}/open-folder`, { method: 'POST' });
+    }
+
+    function toggleStream() {
+        const player = document.getElementById('streamPlayer');
+        if (player.style.display === 'none') {
+            player.style.display = 'block';
+        } else {
+            player.style.display = 'none';
+            player.querySelector('video').pause();
+        }
+    }
+
+    function setStatus(status) {
+        fetch(`/api/videos/${VIDEO_ID}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ watch_status: status })
+        }).then(() => refreshPage());
+    }
+
+    function saveNotes() {
+        const notes = document.getElementById('videoNotes').value;
+        fetch(`/api/videos/${VIDEO_ID}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes })
+        });
+    }
+
+    function saveCategory() {
+        const categoryId = document.getElementById('editCategory').value;
+        fetch(`/api/videos/${VIDEO_ID}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: categoryId ? parseInt(categoryId) : null })
+        }).then(() => refreshPage());
+    }
+
+    function saveTitle() {
+        const title = document.getElementById('editTitle').value.trim();
+        if (!title) return;
+        fetch(`/api/videos/${VIDEO_ID}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title })
+        }).then(() => refreshPage());
+    }
+
+    function showAddTag() {
+        document.getElementById('addTagPanel').style.display = 'block';
+        document.getElementById('newTagInput').focus();
+    }
+
+    function addTag() {
+        const input = document.getElementById('newTagInput');
+        const tag = input.value.trim();
+        if (!tag) return;
+        fetch(`/api/videos/${VIDEO_ID}`)
+            .then(r => r.json())
+            .then(v => {
+                const tags = [...(v.tags || []), tag];
+                return fetch(`/api/videos/${VIDEO_ID}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tags })
+                });
+            })
+            .then(() => refreshPage());
+    }
+
+    function removeTag(tag) {
+        if (!confirm(`确定移除标签 "${tag}" 吗？`)) return;
+        fetch(`/api/videos/${VIDEO_ID}`)
+            .then(r => r.json())
+            .then(v => {
+                const tags = (v.tags || []).filter(t => t !== tag);
+                return fetch(`/api/videos/${VIDEO_ID}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tags })
+                });
+            })
+            .then(() => refreshPage());
+    }
+
+    function deleteVideo() {
+        if (!confirm('确定删除此视频记录吗？（不会删除视频文件）')) return;
+        fetch(`/api/videos/${VIDEO_ID}`, { method: 'DELETE' })
+            .then(() => { location.href = '/'; });
+    }
+</script>
+{% endblock %}
