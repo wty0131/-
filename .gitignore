@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 *.pyo
 data/library.db
+网课视频库/
 *.lnk
 desktop.ini
